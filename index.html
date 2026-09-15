@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>檔案集散地｜v2.0</title>
+<title>檔案集散地｜v2.0.1-test01 排除請假即時同步</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--line:#dfe5ea;--text:#2f3b46;--muted:#8794a1;--blue:#4da3ff;--red:#ef5350;--yellow:#f6c945;--green:#59bf76;--orange:#f79a49}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -10101,9 +10101,12 @@ function renderStudentGrid(){
  grid.innerHTML='';
  for(let n=1;n<=state.studentCount;n++){
    const excludeLeave=!!$('excludeLeaveOnAllPass')?.checked;
-   const isAutoLeave=!isReturnSlipCategory(currentCat())&&excludeLeave&&isToday&&leave.has(n)&&!Object.prototype.hasOwnProperty.call(d,n);
    const hasExplicit=Object.prototype.hasOwnProperty.call(d,n);
-   const st=hasExplicit?d[n]:(isAutoLeave?'orange':'red');
+   // v2.0.1-test01：勾選「排除請假」時，今日聯絡簿的請假名單要立即反映在號碼盤。
+   // 即使草稿裡殘留 red（未處理）也視為自動請假；已明確指定其他狀態則維持老師手動結果。
+   const contactLeave=!isReturnSlipCategory(currentCat())&&excludeLeave&&isToday&&leave.has(n);
+   const isAutoLeave=contactLeave&&(!hasExplicit||d[n]==='red');
+   const st=isAutoLeave?'orange':(hasExplicit?d[n]:'red');
    const b=document.createElement('button');
    b.type='button';
    b.className=`num ${st} ${selectedStudents.has(n)?'selected':''} ${historyEditSeatHasOK(n)?'history-edit-has-ok':''}`;
@@ -10178,9 +10181,11 @@ function markAllPass(){
  for(let n=1;n<=state.studentCount;n++){
    const hasExplicit=Object.prototype.hasOwnProperty.call(d,n);
    const explicitLeave=hasExplicit&&d[n]==='orange';
-   const autoContactLeave=!hasExplicit&&isToday&&leave.has(n);
-   if(excludeLeave&&(explicitLeave||autoContactLeave)){
-     // 老師手動狀態優先：只有「仍是自動請假」或明確設為橘色者才排除。
+   const contactLeave=isToday&&leave.has(n);
+   if(excludeLeave&&(explicitLeave||contactLeave)){
+     // v2.0.1-test01：今日聯絡簿已請假者在「排除請假」開啟時一律保留，不被「全部通過」覆蓋。
+     // 若只是草稿殘留 red，移除該 red，讓號碼盤回到自動橘色；其他明確手動狀態不改寫。
+     if(contactLeave&&hasExplicit&&d[n]==='red')delete d[n];
      continue;
    }
    d[n]='blue';
