@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>檔案集散地｜v2.0</title>
+<title>檔案集散地｜v2.0.1-test02</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--line:#dfe5ea;--text:#2f3b46;--muted:#8794a1;--blue:#4da3ff;--red:#ef5350;--yellow:#f6c945;--green:#59bf76;--orange:#f79a49}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif}
@@ -8285,6 +8285,16 @@ html.mobile-ux .cat-item.active{background:#17382E;border-color:#C8A96A;color:#F
 </style>
 
 
+<style id="v201-test02-history-cancel-button-refine">
+/* test02：僅調整「正在編輯歷史紀錄」區的取消編輯按鈕，避免白底。 */
+#cancelHistoryMainEditBtn{
+  background:#ead8b5!important;
+  border-color:#b99a68!important;
+  color:#4b3825!important;
+}
+#cancelHistoryMainEditBtn:hover{background:#dfc79d!important}
+</style>
+
 <style id="alpha191-mobile-history-edit-refine">
 @media(max-width:700px){
   /* 僅壓縮手機歷史編輯提示區；不碰編輯資料與操作邏輯 */
@@ -9928,7 +9938,10 @@ function moveCategoryToEnd(dragId){
 }
 function selectCategory(id){
  if(!state.categories.some(c=>String(c.id)===String(id)))return;
- state.currentCategory=id;historyOkEditId='';historyOkPending.clear();cancelHistoryRecordEdit(false);selectedStudents.clear();progress={a:'',b:'',skipPages:'',unit:'L',unitNums:'',unitDetail:'',free:''};save();renderAll()
+ refreshToday();
+ state.currentCategory=id;historyOkEditId='';historyOkPending.clear();cancelHistoryRecordEdit(false);selectedStudents.clear();progress={a:'',b:'',skipPages:'',unit:'L',unitNums:'',unitDetail:'',free:''};
+ if($('recordDate'))$('recordDate').value=TODAY;
+ save();renderAll()
 }
 function toggleCategoryManager(){
  if(categoryEditMode){
