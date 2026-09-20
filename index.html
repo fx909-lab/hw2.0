@@ -9012,32 +9012,6 @@ html.mobile-ux .cat-item.active{background:#17382E;border-color:#C8A96A;color:#F
 }
 </style>
 
-
-<style id="ipad-typography-normalize-v2-test04">
-/* v2.0 test04｜iPad 字體實際套用修正。只處理 iPad 字體，不改版面尺寸。 */
-@supports (-webkit-touch-callout: none) {
-  @media (min-width: 701px) and (max-width: 1366px) and (pointer: coarse) {
-    html, body {
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-      font-family: "PingFang TC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif !important;
-    }
-    body :where(button, input, select, textarea, .btn, .input, .small, .field, .field label,
-      .progress-label, .summary-line, .cat-name, .mobile-category-current,
-      .history-table, .history-table th, .history-table td,
-      .overview-table, .overview-table th, .overview-table td,
-      .student-record-table, .student-record-table th, .student-record-table td,
-      .section-title, .side-head > b, .summary h4, .student-record-section h4) {
-      font-family: "PingFang TC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif !important;
-      font-style: normal !important;
-    }
-    button, input, select, textarea {
-      font-family: "PingFang TC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif !important;
-    }
-  }
-}
-</style>
-
 </head>
 <body>
 <header class="topbar"><div class="brand-wrap" aria-label="檔案集散地"><svg class="archive-logo" viewBox="0 0 64 64" role="img" aria-label="信封與檔案 Logo"><defs><linearGradient id="envBrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A66A18"/><stop offset="0.55" stop-color="#7B4A13"/><stop offset="1" stop-color="#5B3510"/></linearGradient><linearGradient id="envDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6B3F12"/><stop offset="1" stop-color="#40260E"/></linearGradient><linearGradient id="paperWarm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF9E8"/><stop offset="1" stop-color="#EAD7AC"/></linearGradient></defs><path d="M12 25L32 10l20 15v27H12z" fill="url(#envBrown)" stroke="#C8A96A" stroke-width="2.4" stroke-linejoin="round"/><path d="M14.5 25.5L32 13l17.5 12.5L32 39z" fill="url(#envDark)" stroke="#B88638" stroke-width="1.6" stroke-linejoin="round"/><path d="M19 14h24v22H19z" rx="1.6" fill="#D2A14B" stroke="#B77A23" stroke-width="1.8"/><path d="M22 11h20v22H22z" rx="1.6" fill="#E2B65E" stroke="#B77A23" stroke-width="1.6"/><path d="M24 16h16v18H24z" rx="1.4" fill="url(#paperWarm)" stroke="#D0AE70" stroke-width="1.5"/><path d="M20 20h23v18H20z" rx="1.8" fill="#F6E8C8" stroke="#D0AE70" stroke-width="1.5"/><path d="M24 17h9v4h-9z" rx="1" fill="#2E6B4E"/><path d="M23 27h16M23 31.5h13" stroke="#B9A77E" stroke-width="1.7" stroke-linecap="round"/><path d="M12 27l20 15 20-15v25H12z" fill="url(#envBrown)" stroke="#C8A96A" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 52l18-16c1.2-1 2.8-1 4 0l18 16" fill="none" stroke="#C8A96A" stroke-width="2.2" stroke-linejoin="round"/><path d="M49 44v10M44 49h10" stroke="#E4C878" stroke-width="2.5" stroke-linecap="round"/></svg><div class="archive-brand-copy"><div class="archive-brand-title">檔案集散地</div><div class="archive-brand-subtitle">THE ARCHIVE EXCHANGE <span class="archive-core-version">v2.0</span></div></div></div><svg class="archive-stamp" viewBox="0 0 260 190" aria-hidden="true">
@@ -12057,6 +12031,8 @@ let queueTimer=null,applyingRemote=false,lastRemoteToken='',baseRemoteToken='',p
 const CLOUD_BASE_TOKEN_KEY='fileHubV2ProductionCloudBaseTokenV1';
 const CLOUD_DEVICE_ID_KEY='fileHubV2ProductionCloudDeviceIdV1';
 const CLOUD_AUTO_INIT_KEY='fileHubV2ProductionCloudAutoInitV1';
+const CLOUD_SESSION_INIT_KEY='fileHubV2ProductionCloudSessionInitV1';
+const CLOUD_PRIVATE_DEVICE_KEY='fileHubV2ProductionCloudPrivateDeviceV1';
 let firebaseInitPromise=null;
 // Firestore 單一文件上限為 1 MiB。JSON 位元組數不是 Firestore 實際編碼大小，
 // 因此採保守門檻：700 KiB 起提醒、850 KiB 起禁止雲端寫入，保留安全緩衝。
@@ -12143,11 +12119,18 @@ async function initFirebase(){
      if(unsubscribe){unsubscribe();unsubscribe=null}
      cloudExists=false;docRef=null;syncConflict=false;baseRemoteToken='';pendingUploadToken='';setButtons();
      if(!user){
-       localStorage.removeItem(CLOUD_AUTO_INIT_KEY);
+       // Auth 初始化暫時沒有使用者時，不主動抹除「私人裝置」設定；
+       // 只有老師明確按「登出」才清除自動恢復登入的啟用標記。
        setStatus('雲端待登入','雲端已啟用；請登入 Google 帳號開始同步。','wait');
        return;
      }
-     localStorage.setItem(CLOUD_AUTO_INIT_KEY,'1');
+     if(ui.privateDevice?.checked){
+       localStorage.setItem(CLOUD_AUTO_INIT_KEY,'1');
+       sessionStorage.removeItem(CLOUD_SESSION_INIT_KEY);
+     }else{
+       sessionStorage.setItem(CLOUD_SESSION_INIT_KEY,'1');
+       localStorage.removeItem(CLOUD_AUTO_INIT_KEY);
+     }
      // v2.0 Production：只讀寫本 production 專用文件，不碰 sandbox 或 1.0 正式資料。
      docRef=fsMod.doc(db,'users',user.uid,'apps','file-hub-v2-production');
      setStatus('正在檢查雲端','正在確認雲端是否已有紀錄…','wait');
@@ -12364,7 +12347,7 @@ function queuePush(){
 }
 window.addEventListener('online',async()=>{
  setStatus('重新檢查雲端','網路已恢復，正在確認離線期間雲端是否有其他更新…','wait');
- if(!firebaseReady&&localStorage.getItem(CLOUD_AUTO_INIT_KEY)==='1'){
+ if(!firebaseReady&&(localStorage.getItem(CLOUD_AUTO_INIT_KEY)==='1'||sessionStorage.getItem(CLOUD_SESSION_INIT_KEY)==='1')){
    await ensureFirebaseReady();
    return;
  }
@@ -12374,22 +12357,58 @@ window.addEventListener('offline',()=>{
  clearTimeout(queueTimer);queueTimer=null;
  setStatus('沒有網路','目前離線；修改會保存在這台裝置，恢復網路後會自動檢查並續傳。','err');
 });
+function rememberPrivateDeviceChoice(){
+ if(!ui.privateDevice)return;
+ if(ui.privateDevice.checked)localStorage.setItem(CLOUD_PRIVATE_DEVICE_KEY,'1');
+ else localStorage.removeItem(CLOUD_PRIVATE_DEVICE_KEY);
+}
+async function applyPrivateDevicePersistence(){
+ if(!firebaseReady||!auth||!window.__HW_FIREBASE?.authMod)return;
+ const {setPersistence,browserLocalPersistence,browserSessionPersistence}=window.__HW_FIREBASE.authMod;
+ const keep=!!ui.privateDevice?.checked;
+ await setPersistence(auth,keep?browserLocalPersistence:browserSessionPersistence);
+ if(currentUser){
+   if(keep){
+     localStorage.setItem(CLOUD_AUTO_INIT_KEY,'1');
+     sessionStorage.removeItem(CLOUD_SESSION_INIT_KEY);
+   }else{
+     localStorage.removeItem(CLOUD_AUTO_INIT_KEY);
+     sessionStorage.setItem(CLOUD_SESSION_INIT_KEY,'1');
+   }
+ }
+}
+if(ui.privateDevice){
+ ui.privateDevice.checked=localStorage.getItem(CLOUD_PRIVATE_DEVICE_KEY)==='1';
+ ui.privateDevice.addEventListener('change',async()=>{
+   rememberPrivateDeviceChoice();
+   try{await applyPrivateDevicePersistence()}
+   catch(err){console.error('persistence update failed',err);setStatus('登入設定未更新','私人裝置登入設定沒有更新成功；目前本機資料不受影響。','err')}
+ });
+}
 async function signIn(){
  const ready=await ensureFirebaseReady();
  if(!ready||!auth)return;
- const {GoogleAuthProvider,signInWithPopup,setPersistence,browserLocalPersistence,browserSessionPersistence}=window.__HW_FIREBASE.authMod;
- await setPersistence(auth,ui.privateDevice?.checked?browserLocalPersistence:browserSessionPersistence);
+ const {GoogleAuthProvider,signInWithPopup}=window.__HW_FIREBASE.authMod;
+ rememberPrivateDeviceChoice();
+ await applyPrivateDevicePersistence();
  const provider=new GoogleAuthProvider();
  provider.setCustomParameters({prompt:'select_account'});
  try{
    await signInWithPopup(auth,provider);
-   localStorage.setItem(CLOUD_AUTO_INIT_KEY,'1');
+   if(ui.privateDevice?.checked){
+     localStorage.setItem(CLOUD_AUTO_INIT_KEY,'1');
+     sessionStorage.removeItem(CLOUD_SESSION_INIT_KEY);
+   }else{
+     localStorage.removeItem(CLOUD_AUTO_INIT_KEY);
+     sessionStorage.setItem(CLOUD_SESSION_INIT_KEY,'1');
+   }
  }
  catch(err){console.error('sign in failed',err);setStatus('登入未完成','Google 登入沒有完成；本機資料完全不受影響。','err')}
 }
 async function signOutNow(){
  if(auth)await window.__HW_FIREBASE.authMod.signOut(auth);
  localStorage.removeItem(CLOUD_AUTO_INIT_KEY);
+ sessionStorage.removeItem(CLOUD_SESSION_INIT_KEY);
  currentUser=null;setButtons();setStatus('雲端待登入','已登出雲端；這台裝置上的本機資料仍保留。','wait');
 }
 window.hwCloud={
@@ -12420,7 +12439,7 @@ window.hwCloud={
 // 曾成功登入的裝置：重新開啟時載入 Firebase，讓 Auth 還原登入並延續原有自動同步。
 setStatus('雲端待啟用','目前只使用本機儲存；按「Google 登入」時才會載入雲端同步元件。','');
 setButtons();
-if(localStorage.getItem(CLOUD_AUTO_INIT_KEY)==='1'){
+if(localStorage.getItem(CLOUD_AUTO_INIT_KEY)==='1'||sessionStorage.getItem(CLOUD_SESSION_INIT_KEY)==='1'){
  if(navigator.onLine)ensureFirebaseReady();
  else setStatus('沒有網路','目前離線；先使用這台裝置已保存的本機資料，恢復網路後會自動檢查雲端並續傳。','err');
 }
