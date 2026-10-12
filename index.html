@@ -9682,7 +9682,8 @@ function setupMobileTopbar(){
 function renderAll(){refreshToday();$('studentCount').value=state.studentCount;if(!$('recordDate').value)$('recordDate').value=TODAY;if(selectedStudentSeat>state.studentCount)selectedStudentSeat=state.studentCount;renderCats();updateMobileCategoryUI();syncHomeworkStatusbar();renderProgress();renderHistoryMainEditBanner();syncReturnSlipLabelEditor();syncHomeworkStatusbar();renderContact();renderStudentGrid();renderOverview();renderStudentRecord();renderTable();renderCurrentCategorySummary()}
 let categoryEditMode=false;
 let selectedStudentSeat=1;
-let studentRecordSortMode='category';
+const STUDENT_RECORD_SORT_KEY='fileHubV2ProductionStudentRecordSortModeV1';
+let studentRecordSortMode=(()=>{try{return localStorage.getItem(STUDENT_RECORD_SORT_KEY)==='pending'?'pending':'category'}catch{return 'category'}})();
 let historyOkEditId='';
 let historyOkPending=new Set();
 let historyEditId='';
@@ -10716,6 +10717,7 @@ function syncStudentSortButtons(){
 }
 function setStudentRecordSortMode(mode){
  studentRecordSortMode=mode==='pending'?'pending':'category';
+ try{localStorage.setItem(STUDENT_RECORD_SORT_KEY,studentRecordSortMode)}catch{}
  syncStudentSortButtons();renderStudentRecord();
 }
 function syncResolvedSeatToCurrentGrid(h,seat){
