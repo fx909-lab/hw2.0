@@ -2908,6 +2908,16 @@ html.mobile-ux .cat-item.active{background:#17382E;border-color:#C8A96A;color:#F
 #studentPanel .student-panel-head .btn:hover,
 #overviewPanel .overview-actions .btn:hover{background:#f1e6d0!important;border-color:#9f7e49!important}
 
+/* 個人紀錄號碼盤：只有尚未通過的座號標紅，選取時仍保留紅色提醒。 */
+#studentSeatPicker .student-seat-btn.has-pending,
+#studentSeatPicker .student-seat-btn.has-pending:not(.active),
+#studentSeatPicker .student-seat-btn.has-pending.active{
+  background:#b83b3b!important;
+  border-color:#932b2b!important;
+  color:#fff!important;
+}
+#studentSeatPicker .student-seat-btn.has-pending:hover{background:#a52f2f!important}
+
 /* 學生個人紀錄：座號像調閱索引籤 */
 #studentSeatPicker.student-seat-picker{
   gap:6px!important;margin:10px 0 14px!important;
@@ -9501,10 +9511,15 @@ function sanitizeState(raw,keepDrafts=false){
   return s;
 }
 const CLOUD_DIRTY_KEY='fileHubV2ProductionCloudDirtyV1';
+const LOCAL_VIEW_CATEGORY_KEY='fileHubV2ProductionViewCategoryV1';
+let localChangeSerial=0;
 let state;try{state=sanitizeState(JSON.parse(localStorage.getItem(STORE)||'null'),true)}catch{state=freshState()}
+const savedViewCategory=localStorage.getItem(LOCAL_VIEW_CATEGORY_KEY);
+if(savedViewCategory&&state.categories.some(c=>c.id===savedViewCategory))state.currentCategory=savedViewCategory;
 let selectedStudents=new Set(),selectedStatus='blue',selectedContactStudents=new Set(),selectedContactStatus='blue',progress={a:'',b:'',skipPages:'',unit:'L',unitNums:'',unitDetail:'',free:''};
 function saveLocalOnly(){localStorage.setItem(STORE,JSON.stringify(state))}
 function save(){
+ localChangeSerial++;
  saveLocalOnly();
  localStorage.setItem(CLOUD_DIRTY_KEY,'1');
  if(window.hwCloud&&typeof window.hwCloud.queuePush==='function')window.hwCloud.queuePush();
@@ -9513,8 +9528,10 @@ window.hwCloudBridge={
  getState:()=>sanitizeState(state,false),
  applyRemote:(raw)=>{
    const localDrafts=(state&&state.drafts&&typeof state.drafts==='object')?state.drafts:{};
+   const viewedCategory=state?.currentCategory;
    const remote=sanitizeState(raw,false);
-   state=sanitizeState({...remote,drafts:localDrafts},true);
+   const preservedCategory=remote.categories.some(c=>c.id===viewedCategory)?viewedCategory:remote.currentCategory;
+   state=sanitizeState({...remote,currentCategory:preservedCategory,drafts:localDrafts},true);
    recomputeAllContinuousResolutions();
    selectedStudents.clear();selectedContactStudents.clear();
    saveLocalOnly();localStorage.setItem(CLOUD_DIRTY_KEY,'0');
@@ -9941,7 +9958,8 @@ function selectCategory(id){
  refreshToday();
  state.currentCategory=id;historyOkEditId='';historyOkPending.clear();cancelHistoryRecordEdit(false);selectedStudents.clear();progress={a:'',b:'',skipPages:'',unit:'L',unitNums:'',unitDetail:'',free:''};
  if($('recordDate'))$('recordDate').value=TODAY;
- save();renderAll()
+ localStorage.setItem(LOCAL_VIEW_CATEGORY_KEY,id);
+ saveLocalOnly();renderAll()
 }
 function toggleCategoryManager(){
  if(categoryEditMode){
@@ -10736,12 +10754,17 @@ function applyStudentRecordQuickOK(historyId,seat){
  renderCurrentCategorySummary();
  renderStudentGrid();
 }
+function studentSeatHasPendingRecord(seat){
+ // 與個人紀錄「待處理優先」共用完成判定：連續作業看最新一期，其他類別看每筆。
+ return state.categories.some(c=>studentHasAnyHistory(c.id)&&categoryPendingForStudent(c,seat));
+}
 function renderStudentRecord(){
  const picker=$('studentSeatPicker'),body=$('studentRecordBody');if(!picker||!body)return;
  syncStudentSortButtons();
  picker.innerHTML='';
  for(let n=1;n<=state.studentCount;n++){
-   const b=document.createElement('button');b.type='button';b.className='student-seat-btn'+(n===selectedStudentSeat?' active':'');b.textContent=n;
+   const b=document.createElement('button');b.type='button';const hasPending=studentSeatHasPendingRecord(n);b.className='student-seat-btn'+(n===selectedStudentSeat?' active':'')+(hasPending?' has-pending':'');b.textContent=n;
+   if(hasPending)b.title='有尚未通過的作業紀錄';
    b.setAttribute('aria-pressed',n===selectedStudentSeat?'true':'false');
    b.addEventListener('click',()=>{selectedStudentSeat=n;renderStudentRecord()});
    picker.appendChild(b);
@@ -12267,11 +12290,23 @@ async function mergeNow(){
    console.error('cloud merge failed',err);enterSyncConflict();
  }
 }
+let uploadInFlight=false;
 async function uploadNow(force=false){
  if(!currentUser||!docRef||applyingRemote)return;
+ if(uploadInFlight){if(!force)queuePush();return false;}
+ uploadInFlight=true;
+ let succeeded=false;
+ try{const result=await uploadNowInternal(force);succeeded=result===true;return result}
+ finally{uploadInFlight=false;if(succeeded&&!force&&bridge?.isDirty?.()&&currentUser&&!syncConflict&&navigator.onLine)queuePush();}
+}
+async function uploadNowInternal(force=false){
+ if(!currentUser||!docRef||applyingRemote)return;
+ const uploadSerial=localChangeSerial;
  if(syncConflict&&!force){enterSyncConflict();return}
  const {setDoc,serverTimestamp,runTransaction,getDocFromServer}=window.__HW_FIREBASE.fsMod;
  const payload=bridge?.getState?.();if(!payload)return;
+ // 畫面目前選取的類別是裝置偏好，不隨正式資料跨裝置傳播。
+ if(payload.categories?.length)payload.currentCategory=payload.categories[0].id;
  const sizeInfo=cloudSizeInfo(payload);
  if(sizeInfo.block){
    clearTimeout(queueTimer);queueTimer=null;pendingUploadToken='';
@@ -12301,7 +12336,9 @@ async function uploadNow(force=false){
     tx.set(docRef,docData,{merge:false});
    });
   }
-  cloudExists=true;lastRemoteToken=newToken;baseRemoteToken=newToken;rememberBaseToken(newToken);pendingUploadToken='';syncConflict=false;bridge?.markSynced?.();setButtons();
+  cloudExists=true;lastRemoteToken=newToken;baseRemoteToken=newToken;rememberBaseToken(newToken);pendingUploadToken='';syncConflict=false;
+  if(uploadSerial===localChangeSerial)bridge?.markSynced?.();
+  setButtons();
   setStatus(sizeInfo.warn?'已同步・容量偏高':'已同步',sizeInfo.warn
     ?`已成功同步；目前雲端資料估計約 ${formatKiB(sizeInfo.bytes)}。建議先匯出 JSON 備份，並在方便時整理較舊歷史紀錄。`
     :'這台裝置的紀錄已寫入雲端。',sizeInfo.warn?'wait':'ok');
