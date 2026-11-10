@@ -11330,31 +11330,14 @@ function saveHistoryRecordFromMain(forceDuplicate=false){
  h.updated=nextUpdatedStamp();
  const c=state.categories.find(x=>x.id===h.catId);
  if(c?.kind==='continuous'){
-   const records=continuousChronological(h.catId);
-   const idx=records.findIndex(x=>x.id===h.id);
-
-   if(idx>=0){
-     for(const n of historyEditTouchedSeats){
-       const st=h.statuses?.[n];
-       const isPending=['red','yellow','green','ring','orange'].includes(st);
-       if(!isPending)continue;
-
-       // 本筆既然被重新指定為未通過，舊的手動 OK 必須取消。
-       if(h.manualResolved)delete h.manualResolved[n];
-
-       // 未通過從「此筆」往後影響；舊紀錄完全不動。
-       // 遇到後面明確的手動補登 OK，視為新的通過事件，從那裡停止。
-       for(let j=idx+1;j<records.length;j++){
-         const later=records[j];
-         if(later.manualResolved?.[n]===true)break;
-         later.statuses||={};
-         later.statuses[n]=st;
-         if(later.resolved)delete later.resolved[n];
-         if(later.resolvedParts)delete later.resolvedParts[n];
-       }
+   // test09：歷史編輯只修改目前 h 的原始 statuses。
+   // 後續紀錄的原始狀態不得連帶覆寫；僅重新推算衍生的完成標記。
+   for(const n of historyEditTouchedSeats){
+     const st=h.statuses?.[n];
+     if(['red','yellow','green','ring','orange'].includes(st)&&h.manualResolved){
+       delete h.manualResolved[n];
      }
    }
-
    recomputeContinuousResolutions(h.catId);
  } else{
    h.resolved={};h.resolvedParts={};
