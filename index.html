@@ -12192,11 +12192,32 @@ function startListener(){
      return;
    }
    const token=snapshotToken(snap);
+   const dirty=!!bridge?.isDirty?.();
    const ownUpdate=!!token&&(token===pendingUploadToken||token===lastRemoteToken);
-   if(bridge?.isDirty?.()&&!ownUpdate){enterSyncConflict();return}
+   // 本機有尚未上傳的登記時，絕不可套用快照，否則會抹掉較新的本機修改。
+   // 監聽器可能在交易完成前收到上一版快照，也可能先於上傳 Promise 收到本次回音。
+   if(dirty){
+     const baseline=persistedBaseToken()||baseRemoteToken;
+     if(ownUpdate){
+       // 上傳中的回音由 uploadNowInternal 統一確認；較新的本機修改仍留待下一輪上傳。
+       if(uploadInFlight){setStatus('等待同步','本機有新修改，正在等候上一輪上傳完成…','wait');return}
+       if(token===lastRemoteToken){baseRemoteToken=token;rememberBaseToken(token);queuePush();return}
+     }
+     if(token===baseline){
+       // 雲端仍是本機修改前的基準版本，不是另一台裝置造成的衝突。
+       if(!uploadInFlight)queuePush();
+       return;
+     }
+     if(snap.metadata.fromCache){
+       setStatus('等待雲端確認','本機修改已保留，正在等候伺服器確認版本…','wait');return;
+     }
+     enterSyncConflict();return;
+   }
+   // 上傳進行中不讓監聽器套用舊快照；交易結果由上傳流程處理。
+   if(uploadInFlight)return;
    syncConflict=false;
    applySnapshot(snap);baseRemoteToken=token;
-   if(!bridge?.isDirty?.()&&!snap.metadata.fromCache)rememberBaseToken(token);
+   if(!snap.metadata.fromCache)rememberBaseToken(token);
    setStatus(snap.metadata.fromCache?'離線快取':'已同步',
      snap.metadata.fromCache?'目前顯示快取資料；恢復網路後會再同步。':'此裝置已和雲端同步。',snap.metadata.fromCache?'wait':'ok');
  });
