@@ -11684,7 +11684,7 @@ function loadContactCollapsedForToday(){
    const raw=JSON.parse(localStorage.getItem(CONTACT_UI_KEY)||'null');
    if(!raw||raw.date!==TODAY){localStorage.setItem(CONTACT_UI_KEY,JSON.stringify({date:TODAY,seen:true,state:null}));return false}
    // 當天第一次開啟預設展開；若使用者沒有手動選擇，重新整理後預設收起。
-   return typeof raw.state==='boolean'?raw.state:true;
+   return typeof raw.state==='boolean'?raw.state:false;
  }catch{return false}
 }
 function rememberContactCollapsed(collapsed){
@@ -12211,7 +12211,12 @@ function startListener(){
      if(snap.metadata.fromCache){
        setStatus('等待雲端確認','本機修改已保留，正在等候伺服器確認版本…','wait');return;
      }
-     enterSyncConflict();return;
+     // 監聽快照的版本差異可能只是同裝置的舊回音或快取時序。
+     // 不直接宣布衝突；交由 uploadNowInternal 的伺服器讀取＋交易檢查判定。
+     // 交易若確認雲端真的被另一裝置修改，仍會進入衝突保護。
+     if(!uploadInFlight)queuePush();
+     else setStatus('等待同步','本機修改已保留，正在等待上一輪上傳完成…','wait');
+     return;
    }
    // 上傳進行中不讓監聽器套用舊快照；交易結果由上傳流程處理。
    if(uploadInFlight)return;
